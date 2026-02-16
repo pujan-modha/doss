@@ -18,6 +18,10 @@
 go.work
 tmp/
 
+# Cache
+.gocache
+.gomodcache
+
 # IDE specific files
 .vscode
 .idea
@@ -31,4 +35,7 @@ main
 
 # OS X generated file
 .DS_Store
+
+# Data files
+data
 
