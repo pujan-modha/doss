@@ -20,7 +20,7 @@ func RegisterRoutes() http.Handler {
 		MaxAge:           300,
 	}))
 
-	r.Get("/health", HealthHandler)
+	r.Get("/doss/v1/health", HealthHandler)
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware)
@@ -30,12 +30,18 @@ func RegisterRoutes() http.Handler {
 		r.Get("/{bucket}", BucketGetHandler) // TODO: Change to ListObjects/ListObjectsV2
 		r.Delete("/{bucket}", BucketDeleteHandler)
 		r.Head("/{bucket}", BucketHeadHandler)
+
+		r.Get("/doss/v1/targets", TargetCollectionGetHandler)
+		r.Get("/doss/v1/targets/{targetID}", TargetItemGetHandler)
+		r.Put("/doss/v1/targets/{targetID}", TargetItemPutHandler)
+		r.Delete("/doss/v1/targets/{targetID}", TargetItemDeleteHandler)
+
 	})
 
 	return r
 }
 
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
+func HealthHandler(w http.ResponseWriter, _ *http.Request) {
 	resp := map[string]string{
 		"message": "Healthy",
 	}

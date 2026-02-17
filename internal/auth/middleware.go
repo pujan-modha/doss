@@ -26,7 +26,8 @@ func Middleware(next http.Handler) http.Handler {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
-
-		next.ServeHTTP(w, r)
+		ownerID := "local-dev-user"
+		ctx := withOwnerID(r.Context(), ownerID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"doss/internal/auth"
 	"doss/internal/metadata"
 	"encoding/json"
 	"errors"
@@ -86,7 +87,7 @@ func handlePutBucketNotification(w http.ResponseWriter, r *http.Request, bucketN
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
 	if err := decoder.Decode(&cfg); err != nil {
-		log.Printf("handlePutBucketNotification Decode error: %v", err)
+		log.Printf("handlePutBucketNotification error: %v", err)
 		writeError(w, http.StatusBadRequest, ErrBadRequest)
 		return
 	}
@@ -116,4 +117,21 @@ func parseBucketName(w http.ResponseWriter, r *http.Request) (string, bool) {
 		return "", false
 	}
 	return b, true
+}
+
+func parseTargetID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	b := chi.URLParam(r, "targetID")
+	if b == "" {
+		writeError(w, http.StatusBadRequest, ErrTargetIDRequired)
+		return "", false
+	}
+	return b, true
+}
+
+func getOwnerID(r *http.Request) string {
+	ownerID, ok := auth.OwnerIDFromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	return ownerID
 }

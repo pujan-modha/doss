@@ -66,7 +66,7 @@ func BucketGetHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, bucket)
 }
 
-func BucketListHandler(w http.ResponseWriter, r *http.Request) {
+func BucketListHandler(w http.ResponseWriter, _ *http.Request) {
 	list, err := metadata.ListBuckets()
 	if err != nil {
 		log.Printf("ListBuckets error: %v", err)
