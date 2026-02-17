@@ -11,7 +11,7 @@ func TestHandler(t *testing.T) {
 	server := httptest.NewServer(RegisterRoutes())
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/health")
+	resp, err := http.Get(server.URL + "/doss/v1/health")
 	if err != nil {
 		t.Fatalf("error making request to server. Err: %v", err)
 	}
