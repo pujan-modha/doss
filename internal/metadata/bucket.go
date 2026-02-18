@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"time"
@@ -22,20 +23,23 @@ func CreateBucket(ownerID string, name string) error {
 		if err == nil {
 			return ErrBucketAlreadyExists
 		}
-		bucket := BucketMeta{
-			Name:      name,
-			OwnerID:   ownerID,
-			CreatedAt: time.Now(),
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			bucket := BucketMeta{
+				Name:      name,
+				OwnerID:   ownerID,
+				CreatedAt: time.Now(),
+			}
+			data, err := json.Marshal(bucket)
+			if err != nil {
+				return err
+			}
+			return txn.Set(key, data)
 		}
-		data, err := json.Marshal(bucket)
-		if err != nil {
-			return err
-		}
-		return txn.Set(key, data)
+		return err
 	})
 }
 
-func GetBucket(ownerID string, name string) (*BucketMeta, error) {
+func GetBucketMetadata(ownerID string, name string) (*BucketMeta, error) {
 	key := []byte("bucket/" + name)
 
 	var bucket BucketMeta
@@ -73,7 +77,10 @@ func ListBuckets(ownerID string) ([]string, error) {
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			k := item.Key()
-
+			suffix := k[len(prefix):]
+			if bytes.IndexByte(suffix, '/') != -1 {
+				continue // skip bucket sub-resources like cors/notification
+			}
 			var meta BucketMeta
 			if err := item.Value(func(val []byte) error {
 				return json.Unmarshal(val, &meta)
@@ -85,7 +92,7 @@ func ListBuckets(ownerID string) ([]string, error) {
 				continue
 			}
 
-			res = append(res, string(k[len(prefix):]))
+			res = append(res, string(suffix))
 		}
 		return nil
 	})
@@ -101,6 +108,7 @@ func ListBuckets(ownerID string) ([]string, error) {
 
 func DeleteBucket(ownerID string, name string) error {
 	key := []byte("bucket/" + name)
+	subresourcePrefix := []byte("bucket/" + name + "/")
 
 	err := DB.Update(
 		func(txn *badger.Txn) error {
@@ -119,7 +127,21 @@ func DeleteBucket(ownerID string, name string) error {
 				if data.OwnerID != ownerID {
 					return ErrNoAccess
 				}
-				return txn.Delete(key)
+				if err := txn.Delete(key); err != nil {
+					return err
+				}
+
+				it := txn.NewIterator(badger.DefaultIteratorOptions)
+				defer it.Close()
+
+				for it.Seek(subresourcePrefix); it.ValidForPrefix(subresourcePrefix); it.Next() {
+					k := append([]byte{}, it.Item().Key()...)
+					if err := txn.Delete(k); err != nil {
+						return err
+					}
+				}
+
+				return nil
 			}); err != nil {
 				return err
 			}

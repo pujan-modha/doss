@@ -64,8 +64,14 @@ func GetNotificationTarget(ownerID, targetID string) (*NotificationTarget, error
 
 func DeleteNotificationTarget(ownerID, targetID string) error {
 	key := []byte("target/" + ownerID + "/" + targetID)
-
-	err := DB.Update(
+	isInUse, err := IsNotificationTargetInUse(ownerID, targetID)
+	if isInUse {
+		return ErrNotificationTargetInUse
+	}
+	if err != nil {
+		return err
+	}
+	err = DB.Update(
 		func(txn *badger.Txn) error {
 			err := txn.Delete(key)
 			if errors.Is(err, badger.ErrKeyNotFound) {
@@ -105,4 +111,34 @@ func ListNotificationTargets(ownerID string) ([]NotificationTarget, error) {
 		res = []NotificationTarget{}
 	}
 	return res, nil
+}
+
+func NotificationTargetExists(ownerID, targetID string) (bool, error) {
+	key := []byte("target/" + ownerID + "/" + targetID)
+
+	err := DB.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(key)
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return false, err
+	}
+
+	// re-check explicitly so we can distinguish not found
+	found := false
+	err = DB.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(key)
+		if err == nil {
+			found = true
+			return nil
+		}
+		if errors.Is(err, badger.ErrKeyNotFound) {
+			return nil
+		}
+		return err
+	})
+	return found, err
 }

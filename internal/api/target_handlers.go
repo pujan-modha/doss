@@ -115,7 +115,12 @@ func TargetItemDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := metadata.DeleteNotificationTarget(ownerID, targetID); err != nil {
+	err := metadata.DeleteNotificationTarget(ownerID, targetID)
+	if errors.Is(err, metadata.ErrNotificationTargetInUse) {
+		writeError(w, http.StatusConflict, ErrNotificationTargetInUse)
+		return
+	}
+	if err != nil {
 		log.Printf("DeleteNotificationTarget error: %v", err)
 		writeError(w, http.StatusInternalServerError, ErrInternal)
 		return

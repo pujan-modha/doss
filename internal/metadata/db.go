@@ -18,3 +18,12 @@ func InitDB(path string) {
 
 	DB = db
 }
+
+func CloseDB() {
+	if DB == nil {
+		return
+	}
+	if err := DB.Close(); err != nil {
+		return
+	}
+}

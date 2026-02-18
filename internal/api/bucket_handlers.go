@@ -2,6 +2,7 @@ package api
 
 import (
 	"doss/internal/metadata"
+	"errors"
 	"log"
 	"net/http"
 )
@@ -30,7 +31,11 @@ func BucketPutHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := metadata.CreateBucket(ownerID, bucketName); err != nil {
 		log.Printf("CreateBucket error: %v", err)
-		writeError(w, http.StatusConflict, ErrBucketAlreadyExists)
+		if errors.Is(err, metadata.ErrBucketAlreadyExists) {
+			writeError(w, http.StatusConflict, ErrBucketAlreadyExists)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, ErrInternal)
 		return
 	}
 
@@ -66,14 +71,12 @@ func BucketGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucket, err := metadata.GetBucket(ownerID, bucketName)
-	if err != nil {
-		log.Printf("GetBucket error: %v", err)
-		writeError(w, http.StatusNotFound, ErrBucketNotFound)
+	if r.URL.Query().Has("metadata") {
+		handleGetBucketMetadata(w, ownerID, bucketName)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, bucket)
+	writeJSON(w, http.StatusNotImplemented, nil)
 }
 
 func BucketListHandler(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +114,7 @@ func BucketDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := metadata.DeleteBucket(ownerID, bucketName); err != nil {
 		log.Printf("DeleteBucket error: %v", err)
-		writeError(w, http.StatusNotFound, ErrBucketNotFound)
+		writeBucketAccessError(w, err)
 		return
 	}
 
@@ -132,7 +135,14 @@ func BucketHeadHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := metadata.HeadBucket(ownerID, bucketName); err != nil {
 		log.Printf("HeadBucket error: %v", err)
-		w.WriteHeader(http.StatusNotFound)
+		switch {
+		case errors.Is(err, metadata.ErrBucketNotFound):
+			w.WriteHeader(http.StatusNotFound)
+		case errors.Is(err, metadata.ErrNoAccess):
+			w.WriteHeader(http.StatusForbidden)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 

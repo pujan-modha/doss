@@ -11,11 +11,32 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func writeBucketAccessError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, metadata.ErrBucketNotFound):
+		writeError(w, http.StatusNotFound, ErrBucketNotFound)
+	case errors.Is(err, metadata.ErrNoAccess):
+		writeError(w, http.StatusForbidden, ErrForbidden)
+	default:
+		writeError(w, http.StatusInternalServerError, ErrInternal)
+	}
+}
+
+func handleGetBucketMetadata(w http.ResponseWriter, ownerID string, bucketName string) {
+	bucket, err := metadata.GetBucketMetadata(ownerID, bucketName)
+	if err != nil {
+		log.Printf("GetBucket error: %v", err)
+		writeBucketAccessError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, bucket)
+}
+
 func handleGetBucketLocation(w http.ResponseWriter, ownerID string, bucketName string) {
 	loc, err := metadata.GetBucketLocation(ownerID, bucketName)
 	if err != nil {
 		log.Printf("GetBucketLocation error: %v", err)
-		writeError(w, http.StatusNotFound, ErrBucketNotFound)
+		writeBucketAccessError(w, err)
 		return
 	}
 
@@ -26,7 +47,7 @@ func handleGetBucketCORS(w http.ResponseWriter, ownerID string, bucketName strin
 	cors, err := metadata.GetBucketCORS(ownerID, bucketName)
 	if err != nil {
 		log.Printf("GetBucketCORS error: %v", err)
-		writeError(w, http.StatusNotFound, ErrBucketNotFound)
+		writeBucketAccessError(w, err)
 		return
 	}
 
@@ -43,14 +64,9 @@ func handlePutBucketCORS(w http.ResponseWriter, r *http.Request, ownerID string,
 		return
 	}
 	err := metadata.PutBucketCORS(ownerID, bucketName, &cors)
-	if errors.Is(err, metadata.ErrBucketNotFound) {
-		log.Printf("PutBucketCORS error: %v", err)
-		writeError(w, http.StatusNotFound, ErrBucketNotFound)
-		return
-	}
 	if err != nil {
 		log.Printf("PutBucketCORS error: %v", err)
-		writeError(w, http.StatusInternalServerError, ErrInternal)
+		writeBucketAccessError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -59,7 +75,7 @@ func handlePutBucketCORS(w http.ResponseWriter, r *http.Request, ownerID string,
 func handleDeleteBucketCORS(w http.ResponseWriter, ownerID string, bucketName string) {
 	if err := metadata.DeleteBucketCORS(ownerID, bucketName); err != nil {
 		log.Printf("DeleteBucketCORS error: %v", err)
-		writeError(w, http.StatusNotFound, ErrBucketNotFound)
+		writeBucketAccessError(w, err)
 		return
 	}
 
@@ -68,14 +84,9 @@ func handleDeleteBucketCORS(w http.ResponseWriter, ownerID string, bucketName st
 
 func handleGetBucketNotification(w http.ResponseWriter, ownerID string, bucketName string) {
 	cfg, err := metadata.GetBucketNotification(ownerID, bucketName)
-	if errors.Is(err, metadata.ErrBucketNotFound) {
-		log.Printf("GetBucketNotification error: %v", err)
-		writeError(w, http.StatusNotFound, ErrBucketNotFound)
-		return
-	}
 	if err != nil {
 		log.Printf("GetBucketNotification error: %v", err)
-		writeError(w, http.StatusInternalServerError, ErrInternal)
+		writeBucketAccessError(w, err)
 		return
 	}
 
@@ -97,14 +108,9 @@ func handlePutBucketNotification(w http.ResponseWriter, r *http.Request, ownerID
 		writeError(w, http.StatusBadRequest, ErrBadRequest)
 		return
 	}
-	if errors.Is(err, metadata.ErrBucketNotFound) {
-		log.Printf("PutBucketNotification error: %v", err)
-		writeError(w, http.StatusNotFound, ErrBucketNotFound)
-		return
-	}
 	if err != nil {
 		log.Printf("PutBucketNotification error: %v", err)
-		writeError(w, http.StatusInternalServerError, ErrInternal)
+		writeBucketAccessError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

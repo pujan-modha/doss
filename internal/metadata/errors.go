@@ -9,4 +9,5 @@ var (
 	ErrInvalidNotificationTargetConfig = errors.New("invalid notification target config")
 	ErrNoAccess                        = errors.New("no access")
 	ErrNotificationTargetNotFound      = errors.New("notification target not found")
+	ErrNotificationTargetInUse         = errors.New("notification target in use")
 )
