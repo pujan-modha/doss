@@ -4,8 +4,6 @@ import (
 	"doss/internal/metadata"
 	"log"
 	"net/http"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func BucketPutHandler(w http.ResponseWriter, r *http.Request) {
@@ -14,17 +12,23 @@ func BucketPutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ownerID := getOwnerID(r)
+	if ownerID == "" {
+		writeError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
 	if r.URL.Query().Has("cors") {
-		handlePutBucketCORS(w, r, bucketName)
+		handlePutBucketCORS(w, r, ownerID, bucketName)
 		return
 	}
 
 	if r.URL.Query().Has("notification") {
-		handlePutBucketNotification(w, r, bucketName)
+		handlePutBucketNotification(w, r, ownerID, bucketName)
 		return
 	}
 
-	if err := metadata.CreateBucket(bucketName); err != nil {
+	if err := metadata.CreateBucket(ownerID, bucketName); err != nil {
 		log.Printf("CreateBucket error: %v", err)
 		writeError(w, http.StatusConflict, ErrBucketAlreadyExists)
 		return
@@ -41,22 +45,28 @@ func BucketGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ownerID := getOwnerID(r)
+	if ownerID == "" {
+		writeError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
 	if r.URL.Query().Has("location") {
-		handleGetBucketLocation(w, bucketName)
+		handleGetBucketLocation(w, ownerID, bucketName)
 		return
 	}
 
 	if r.URL.Query().Has("cors") {
-		handleGetBucketCORS(w, bucketName)
+		handleGetBucketCORS(w, ownerID, bucketName)
 		return
 	}
 
 	if r.URL.Query().Has("notification") {
-		handleGetBucketNotification(w, bucketName)
+		handleGetBucketNotification(w, ownerID, bucketName)
 		return
 	}
 
-	bucket, err := metadata.GetBucket(bucketName)
+	bucket, err := metadata.GetBucket(ownerID, bucketName)
 	if err != nil {
 		log.Printf("GetBucket error: %v", err)
 		writeError(w, http.StatusNotFound, ErrBucketNotFound)
@@ -66,8 +76,13 @@ func BucketGetHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, bucket)
 }
 
-func BucketListHandler(w http.ResponseWriter, _ *http.Request) {
-	list, err := metadata.ListBuckets()
+func BucketListHandler(w http.ResponseWriter, r *http.Request) {
+	ownerID := getOwnerID(r)
+	if ownerID == "" {
+		writeError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+	list, err := metadata.ListBuckets(ownerID)
 	if err != nil {
 		log.Printf("ListBuckets error: %v", err)
 		writeError(w, http.StatusInternalServerError, ErrInternal)
@@ -83,12 +98,18 @@ func BucketDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Query().Has("cors") {
-		handleDeleteBucketCORS(w, bucketName)
+	ownerID := getOwnerID(r)
+	if ownerID == "" {
+		writeError(w, http.StatusUnauthorized, ErrUnauthorized)
 		return
 	}
 
-	if err := metadata.DeleteBucket(bucketName); err != nil {
+	if r.URL.Query().Has("cors") {
+		handleDeleteBucketCORS(w, ownerID, bucketName)
+		return
+	}
+
+	if err := metadata.DeleteBucket(ownerID, bucketName); err != nil {
 		log.Printf("DeleteBucket error: %v", err)
 		writeError(w, http.StatusNotFound, ErrBucketNotFound)
 		return
@@ -98,13 +119,18 @@ func BucketDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func BucketHeadHandler(w http.ResponseWriter, r *http.Request) {
-	bucketName := chi.URLParam(r, "bucket")
-	if bucketName == "" {
-		w.WriteHeader(http.StatusBadRequest)
+	bucketName, ok := parseBucketName(w, r)
+	if !ok {
 		return
 	}
 
-	if err := metadata.HeadBucket(bucketName); err != nil {
+	ownerID := getOwnerID(r)
+	if ownerID == "" {
+		writeError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
+	if err := metadata.HeadBucket(ownerID, bucketName); err != nil {
 		log.Printf("HeadBucket error: %v", err)
 		w.WriteHeader(http.StatusNotFound)
 		return

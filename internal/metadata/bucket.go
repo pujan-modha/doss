@@ -14,7 +14,7 @@ type BucketMeta struct {
 	CreatedAt time.Time
 }
 
-func CreateBucket(name string) error {
+func CreateBucket(ownerID string, name string) error {
 	key := []byte("bucket/" + name)
 
 	return DB.Update(func(txn *badger.Txn) error {
@@ -24,7 +24,7 @@ func CreateBucket(name string) error {
 		}
 		bucket := BucketMeta{
 			Name:      name,
-			OwnerID:   "local-dev-user",
+			OwnerID:   ownerID,
 			CreatedAt: time.Now(),
 		}
 		data, err := json.Marshal(bucket)
@@ -35,7 +35,7 @@ func CreateBucket(name string) error {
 	})
 }
 
-func GetBucket(name string) (*BucketMeta, error) {
+func GetBucket(ownerID string, name string) (*BucketMeta, error) {
 	key := []byte("bucket/" + name)
 
 	var bucket BucketMeta
@@ -56,43 +56,74 @@ func GetBucket(name string) (*BucketMeta, error) {
 	if err != nil {
 		return nil, err
 	}
+	if bucket.OwnerID != ownerID {
+		return nil, ErrNoAccess
+	}
 	return &bucket, nil
 }
 
-func ListBuckets() ([]string, error) {
+func ListBuckets(ownerID string) ([]string, error) {
 	var res []string
+
 	err := DB.View(func(txn *badger.Txn) error {
-		opts := badger.DefaultIteratorOptions
-		it := txn.NewIterator(opts)
+		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 
 		prefix := []byte("bucket/")
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			k := item.Key()
+
+			var meta BucketMeta
+			if err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &meta)
+			}); err != nil {
+				return err
+			}
+
+			if meta.OwnerID != ownerID {
+				continue
+			}
+
 			res = append(res, string(k[len(prefix):]))
 		}
 		return nil
 	})
+
 	if err != nil {
 		return nil, err
+	}
+	if res == nil {
+		res = []string{}
 	}
 	return res, nil
 }
 
-func DeleteBucket(name string) error {
+func DeleteBucket(ownerID string, name string) error {
 	key := []byte("bucket/" + name)
 
 	err := DB.Update(
 		func(txn *badger.Txn) error {
-			_, err := txn.Get(key)
+			bucket, err := txn.Get(key)
 			if errors.Is(err, badger.ErrKeyNotFound) {
 				return ErrBucketNotFound
 			}
 			if err != nil {
 				return err
 			}
-			return txn.Delete(key)
+			if err := bucket.Value(func(val []byte) error {
+				var data BucketMeta
+				if err := json.Unmarshal(val, &data); err != nil {
+					return err
+				}
+				if data.OwnerID != ownerID {
+					return ErrNoAccess
+				}
+				return txn.Delete(key)
+			}); err != nil {
+				return err
+			}
+			return err
 		})
 	if err != nil {
 		return err
@@ -100,16 +131,31 @@ func DeleteBucket(name string) error {
 	return nil
 }
 
-func HeadBucket(name string) error {
+func HeadBucket(ownerID string, name string) error {
 	key := []byte("bucket/" + name)
 
 	return DB.View(
 		func(txn *badger.Txn) error {
-			_, err := txn.Get(key)
+			bucket, err := txn.Get(key)
 			if errors.Is(err, badger.ErrKeyNotFound) {
 				return ErrBucketNotFound
 			}
-			return err
+			if err != nil {
+				return err
+			}
+			if err := bucket.Value(func(val []byte) error {
+				var data BucketMeta
+				if err := json.Unmarshal(val, &data); err != nil {
+					return err
+				}
+				if data.OwnerID != ownerID {
+					return ErrNoAccess
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return nil
 		},
 	)
 }
@@ -118,16 +164,31 @@ type Location struct {
 	Location string `json:"location"`
 }
 
-func GetBucketLocation(name string) (*Location, error) {
+func GetBucketLocation(ownerID string, name string) (*Location, error) {
 	key := []byte("bucket/" + name)
 
 	err := DB.View(
 		func(txn *badger.Txn) error {
-			_, err := txn.Get(key)
+			bucket, err := txn.Get(key)
 			if errors.Is(err, badger.ErrKeyNotFound) {
 				return ErrBucketNotFound
 			}
-			return err
+			if err != nil {
+				return err
+			}
+			if err := bucket.Value(func(val []byte) error {
+				var data BucketMeta
+				if err := json.Unmarshal(val, &data); err != nil {
+					return err
+				}
+				if data.OwnerID != ownerID {
+					return ErrNoAccess
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return nil
 		},
 	)
 
@@ -147,8 +208,8 @@ type BucketCORS struct {
 	ExposeHeaders  []string `json:"expose_headers"`
 }
 
-func GetBucketCORS(name string) (*BucketCORS, error) {
-	if err := HeadBucket(name); err != nil {
+func GetBucketCORS(ownerID string, name string) (*BucketCORS, error) {
+	if err := HeadBucket(ownerID, name); err != nil {
 		return nil, err
 	}
 
@@ -175,8 +236,8 @@ func GetBucketCORS(name string) (*BucketCORS, error) {
 	return &cors, nil
 }
 
-func PutBucketCORS(name string, bucketCORS *BucketCORS) error {
-	if err := HeadBucket(name); err != nil {
+func PutBucketCORS(ownerID string, name string, bucketCORS *BucketCORS) error {
+	if err := HeadBucket(ownerID, name); err != nil {
 		return err
 	}
 
@@ -191,8 +252,8 @@ func PutBucketCORS(name string, bucketCORS *BucketCORS) error {
 	})
 }
 
-func DeleteBucketCORS(name string) error {
-	if err := HeadBucket(name); err != nil {
+func DeleteBucketCORS(ownerID string, name string) error {
+	if err := HeadBucket(ownerID, name); err != nil {
 		return err
 	}
 

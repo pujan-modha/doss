@@ -11,8 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func handleGetBucketLocation(w http.ResponseWriter, bucketName string) {
-	loc, err := metadata.GetBucketLocation(bucketName)
+func handleGetBucketLocation(w http.ResponseWriter, ownerID string, bucketName string) {
+	loc, err := metadata.GetBucketLocation(ownerID, bucketName)
 	if err != nil {
 		log.Printf("GetBucketLocation error: %v", err)
 		writeError(w, http.StatusNotFound, ErrBucketNotFound)
@@ -22,8 +22,8 @@ func handleGetBucketLocation(w http.ResponseWriter, bucketName string) {
 	writeJSON(w, http.StatusOK, loc)
 }
 
-func handleGetBucketCORS(w http.ResponseWriter, bucketName string) {
-	cors, err := metadata.GetBucketCORS(bucketName)
+func handleGetBucketCORS(w http.ResponseWriter, ownerID string, bucketName string) {
+	cors, err := metadata.GetBucketCORS(ownerID, bucketName)
 	if err != nil {
 		log.Printf("GetBucketCORS error: %v", err)
 		writeError(w, http.StatusNotFound, ErrBucketNotFound)
@@ -33,7 +33,7 @@ func handleGetBucketCORS(w http.ResponseWriter, bucketName string) {
 	writeJSON(w, http.StatusOK, cors)
 }
 
-func handlePutBucketCORS(w http.ResponseWriter, r *http.Request, bucketName string) {
+func handlePutBucketCORS(w http.ResponseWriter, r *http.Request, ownerID string, bucketName string) {
 	var cors metadata.BucketCORS
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
@@ -42,7 +42,7 @@ func handlePutBucketCORS(w http.ResponseWriter, r *http.Request, bucketName stri
 		writeError(w, http.StatusBadRequest, ErrBadRequest)
 		return
 	}
-	err := metadata.PutBucketCORS(bucketName, &cors)
+	err := metadata.PutBucketCORS(ownerID, bucketName, &cors)
 	if errors.Is(err, metadata.ErrBucketNotFound) {
 		log.Printf("PutBucketCORS error: %v", err)
 		writeError(w, http.StatusNotFound, ErrBucketNotFound)
@@ -56,8 +56,8 @@ func handlePutBucketCORS(w http.ResponseWriter, r *http.Request, bucketName stri
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func handleDeleteBucketCORS(w http.ResponseWriter, bucketName string) {
-	if err := metadata.DeleteBucketCORS(bucketName); err != nil {
+func handleDeleteBucketCORS(w http.ResponseWriter, ownerID string, bucketName string) {
+	if err := metadata.DeleteBucketCORS(ownerID, bucketName); err != nil {
 		log.Printf("DeleteBucketCORS error: %v", err)
 		writeError(w, http.StatusNotFound, ErrBucketNotFound)
 		return
@@ -66,8 +66,8 @@ func handleDeleteBucketCORS(w http.ResponseWriter, bucketName string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func handleGetBucketNotification(w http.ResponseWriter, bucketName string) {
-	cfg, err := metadata.GetBucketNotification(bucketName)
+func handleGetBucketNotification(w http.ResponseWriter, ownerID string, bucketName string) {
+	cfg, err := metadata.GetBucketNotification(ownerID, bucketName)
 	if errors.Is(err, metadata.ErrBucketNotFound) {
 		log.Printf("GetBucketNotification error: %v", err)
 		writeError(w, http.StatusNotFound, ErrBucketNotFound)
@@ -82,7 +82,7 @@ func handleGetBucketNotification(w http.ResponseWriter, bucketName string) {
 	writeJSON(w, http.StatusOK, cfg)
 }
 
-func handlePutBucketNotification(w http.ResponseWriter, r *http.Request, bucketName string) {
+func handlePutBucketNotification(w http.ResponseWriter, r *http.Request, ownerID string, bucketName string) {
 	var cfg metadata.BucketNotificationConfig
 	decoder := json.NewDecoder(r.Body)
 	defer r.Body.Close()
@@ -91,7 +91,7 @@ func handlePutBucketNotification(w http.ResponseWriter, r *http.Request, bucketN
 		writeError(w, http.StatusBadRequest, ErrBadRequest)
 		return
 	}
-	err := metadata.PutBucketNotification(bucketName, &cfg)
+	err := metadata.PutBucketNotification(ownerID, bucketName, &cfg)
 	if errors.Is(err, metadata.ErrInvalidNotificationConfig) {
 		log.Printf("PutBucketNotification error: %v", err)
 		writeError(w, http.StatusBadRequest, ErrBadRequest)

@@ -24,8 +24,8 @@ const (
 	DeleteObjectEvent = "s3:ObjectRemoved:Delete"
 )
 
-func GetBucketNotification(name string) (*BucketNotificationConfig, error) {
-	if err := HeadBucket(name); err != nil {
+func GetBucketNotification(ownerID string, name string) (*BucketNotificationConfig, error) {
+	if err := HeadBucket(ownerID, name); err != nil {
 		return nil, ErrBucketNotFound
 	}
 
@@ -56,8 +56,8 @@ func GetBucketNotification(name string) (*BucketNotificationConfig, error) {
 	return &cfg, nil
 }
 
-func PutBucketNotification(name string, cfg *BucketNotificationConfig) error {
-	if err := HeadBucket(name); err != nil {
+func PutBucketNotification(ownerID string, name string, cfg *BucketNotificationConfig) error {
+	if err := HeadBucket(ownerID, name); err != nil {
 		return ErrBucketNotFound
 	}
 
